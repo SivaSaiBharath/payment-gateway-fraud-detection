@@ -1,41 +1,110 @@
 # Transaction Monitor — Fraud Detection Engine
 
-A Spring Boot service that evaluates incoming transactions against a configurable set of fraud rules in real time, raises alerts, and automatically locks accounts when high-severity violations are detected.
+A Java Spring Boot application that monitors financial transactions, detects suspicious activities using a rule-based fraud detection engine, generates fraud alerts, and automatically locks accounts when high-severity violations are detected.
+
+## Live Demo
+
+**Frontend:** https://fraud-detection-engine-1.onrender.com/
+
+**Hosting Platform:** Render
 
 ## Overview
 
-Every transaction submitted to the system is:
+Transaction Monitor is a backend application designed to identify potentially fraudulent financial transactions through configurable business rules.
 
-1. Saved as `PENDING`
-2. Checked against the account's current status (rejected immediately if the account is already `LOCKED`)
-3. Evaluated by a pluggable rule engine
-4. Updated to `SUCCESS`, `FLAGGED`, or `REJECTED` based on the outcome
-5. Logged as one or more `Alert` records if any rule is violated
+Every incoming transaction is evaluated by a centralized fraud detection engine. Based on the detected violations, the application determines the transaction status, generates alerts, and manages account locking.
 
-Accounts with a `HIGH` severity violation are automatically locked, blocking all future transactions on that account until manually unlocked.
+## Key Features
+
+- Real-time transaction processing and fraud evaluation.
+- Strategy Pattern-based fraud detection engine.
+- Multiple independent fraud detection rules.
+- Automatic fraud alert generation.
+- Automatic account locking for high-severity violations.
+- Transaction status management.
+- REST API development using Spring Boot.
+- Centralized exception handling.
+- MySQL database integration using Spring Data JPA.
+
+## Transaction Processing Flow
+
+```text
+        Client / Postman
+               |
+               ▼
+      Transaction Request
+               |
+               ▼
+       Transaction Service
+               |
+               ▼
+       Account Verification
+               |
+               ▼
+       Save as PENDING
+               |
+               ▼
+       Check Account Status
+               |
+               ▼
+        Fraud Rule Engine
+               |
+       ┌───────┼────────┐
+       ▼       ▼        ▼
+    Amount    PIN    Velocity
+     Rule    Rule     Rule
+       |       |        |
+       └───────┼────────┘
+               |
+               ▼
+      Collect Violations
+               |
+        ┌──────┴──────┐
+        ▼             ▼
+   Generate       Check Account
+     Alerts          Locking
+        |             |
+        └──────┬──────┘
+               |
+               ▼
+       Update Transaction
+               |
+       ┌───────┼────────┐
+       ▼       ▼        ▼
+    SUCCESS FLAGGED  REJECTED
+```
 
 ## Architecture
 
-```
-TransactionController
-        │
-        ▼
-TransactionService
-        │
-        ├── TransactionRepository   (persist transaction)
-        ├── AccountsRepository      (fetch / lock account)
-        ├── RuleEngine              (evaluate fraud rules)
-        │       │
-        │       └── List<FraudRule> (auto-injected by Spring)
-        │               ├── HighAmountRule
-        │               └── ... (add more rules here)
-        │
-        └── AlertsRepository        (persist violations)
+```text
+              TransactionController
+                       |
+                       ▼
+                TransactionService
+                       |
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+    Transaction    Accounts     RuleEngine
+    Repository    Repository        |
+                                  List<FraudRule>
+                                      |
+                         ┌────────────┼────────────┐
+                         ▼            ▼            ▼
+                    HighAmount   PinViolation   Velocity
+                       Rule          Rule         Rule
+                         |
+                         ▼
+                  RuleViolation List
+                         |
+                         ▼
+                  AlertsRepository
 ```
 
-### Rule Engine
+## Fraud Detection Engine
 
-`RuleEngine` is a `@Component` that takes a `List<FraudRule>` in its constructor. Spring automatically collects every `@Component`-annotated `FraudRule` implementation in the application context and injects them — no manual wiring required. Adding a new fraud check is as simple as creating a new class that implements `FraudRule`.
+The application uses the **Strategy Design Pattern** to implement independent fraud detection rules.
+
+All fraud rules follow a common interface:
 
 ```java
 public interface FraudRule {
@@ -43,121 +112,238 @@ public interface FraudRule {
 }
 ```
 
-`RuleEngine.evaluate(txn, account)` runs the transaction and account through every registered rule and collects all triggered violations into a `List<RuleViolation>`.
+### Implemented Fraud Rules
 
-## Entities
+| Fraud Rule | Description |
+|---|---|
+| HighAmountRule | Detects transactions exceeding the configured amount threshold. |
+| PinViolationRule | Detects repeated incorrect PIN attempts within a defined time window. |
+| VelocityRule | Detects multiple transactions occurring within a short period. |
 
-| Entity | Table | Purpose |
-|---|---|---|
-| `Transaction` | `transaction` | A single debit/credit request, with a status lifecycle |
-| `Accounts` | `accounts` | Account balance, holder info, and lock status |
-| `Alerts` | `alerts` | One row per rule violation, linked to a transaction |
+### How the Rule Engine Works
 
-### Transaction status lifecycle
+The `RuleEngine` is a Spring-managed component that receives a `List<FraudRule>` through constructor injection.
 
-```
-PENDING → SUCCESS              (no violations)
-PENDING → FLAGGED              (violation(s), action = ALERT_ONLY)
-PENDING → REJECTED             (violation with action = LOCK_ACCOUNT,
-                                  OR account already LOCKED)
-```
+Spring automatically discovers all registered fraud rule implementations annotated with `@Component` and injects them into the list.
 
-### Account status
+The RuleEngine executes each rule against the incoming transaction and collects the triggered violations.
 
-```
-ACTIVE → LOCKED   (triggered by any HIGH severity violation)
-```
+Each violation contains information such as:
 
-## Fraud Rules
+- Reason
+- Severity
+- Recommended action
 
-| Rule | Trigger | Severity | Action |
-|---|---|---|---|
-| `HighAmountRule` | `amount > 50000` | `MEDIUM` | `ALERT_ONLY` |
+The collected violations are used to generate alerts and determine the transaction outcome.
 
-> Add new rules by implementing `FraudRule` and annotating with `@Component`. The `RuleEngine` will pick them up automatically.
+### Design Pattern and SOLID Principles
 
-## API
+The Strategy Pattern allows each fraud detection rule to be implemented independently using a common interface.
 
-### `POST /requestTxn`
+This supports the **Open/Closed Principle**:
 
-Submits a new transaction for fraud evaluation.
+- Open for extension: New fraud rules can be added.
+- Closed for modification: Existing rules and the RuleEngine do not need to be modified when adding another rule.
 
-**Request body**
+For example, a new `BlacklistedMerchantRule` can be introduced by implementing the `FraudRule` interface and registering it as a Spring component.
+
+## Transaction Lifecycle
+
+### Transaction Status
+
+| Status | Description |
+|---|---|
+| PENDING | Transaction received and awaiting fraud evaluation. |
+| SUCCESS | No fraud rule violations detected. |
+| FLAGGED | Suspicious activity detected and an alert generated. |
+| REJECTED | Transaction rejected due to a blocking fraud action or locked account. |
+
+### Account Status
+
+| Status | Description |
+|---|---|
+| ACTIVE | Account is allowed to process transactions. |
+| LOCKED | Account is blocked from processing further transactions. |
+
+When a high-severity violation is detected, the application locks the associated account. Future transactions from that account are rejected.
+
+## Alert Management
+
+Whenever a fraud rule is triggered, the application generates an alert associated with the corresponding transaction.
+
+Each alert stores information such as:
+
+- Transaction ID
+- Violation reason
+- Severity
+- Recommended action
+- Resolution status
+
+Multiple fraud rules can trigger for the same transaction, resulting in multiple alert records.
+
+## REST API Documentation
+
+**Base URL:** `http://localhost:9090`
+
+### 1. Create Transaction
+
+**POST** `/Api/transaction`
+
+Request:
 
 ```json
 {
   "accountId": 1,
   "amount": 75000.00,
   "type": "DEBIT",
-  "location": "Hyderabad"
-}
-```
-
-**Response**
-
-```json
-{
-  "id": 6,
-  "accountId": 1,
-  "amount": 75000.0,
-  "type": "DEBIT",
   "location": "Hyderabad",
-  "status": "FLAGGED",
-  "flagged": true,
-  "timestamp": "2026-06-21T23:49:13.7073483"
+  "isPinCorrect": true
 }
 ```
 
-If the account is already `LOCKED`, the transaction is rejected immediately and no rules are evaluated:
+Creates a transaction and evaluates it against the registered fraud rules.
 
-```json
-{
-  "id": 7,
-  "status": "REJECTED",
-  "flagged": false
-}
+### 2. Get All Transactions
+
+**GET** `/Api/transaction`
+
+Retrieves all recorded transactions.
+
+### 3. Get Transaction By ID
+
+**GET** `/Api/transaction/{id}`
+
+Example:
+
+```text
+GET /Api/transaction/1
 ```
 
-## Tech Stack
+Retrieves a transaction using its unique ID.
 
-- Java + Spring Boot
-- Spring Data JPA / Hibernate
-- MySQL
-- Lombok
+### 4. Get Flagged Transactions
+
+**GET** `/Api/transaction?flagged=true`
+
+Retrieves transactions marked as suspicious.
+
+### Possible Transaction Outcomes
+
+- `SUCCESS`
+- `FLAGGED`
+- `REJECTED`
+
+### Exception Handling
+
+The application uses centralized exception handling through `@RestControllerAdvice`.
+
+| Exception | HTTP Status | Description |
+|---|---:|---|
+| AccountNotFound | 404 | Account does not exist. |
+| AccountLockedException | 403 | Account is locked and cannot process transactions. |
+
+## Database Design
+
+The application uses MySQL with three primary entities.
+
+| Entity | Purpose |
+|---|---|
+| Transaction | Stores transaction details and processing status. |
+| Accounts | Stores account information and account status. |
+| Alerts | Stores individual fraud rule violations. |
+
+Spring Data JPA and Hibernate are used for database operations and entity management.
+
+## Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| Java 17 | Backend programming language |
+| Spring Boot | Backend application framework |
+| Spring Web | REST API development |
+| Spring Data JPA | Database operations |
+| Hibernate | Object-relational mapping |
+| MySQL | Relational database |
+| Maven | Build and dependency management |
+| Lombok | Boilerplate code reduction |
+| Postman | API testing |
+| Git & GitHub | Version control |
 
 ## Getting Started
 
-1. Configure your MySQL connection in `application.properties` (or `.yml`):
+### Prerequisites
 
-   ```properties
-   spring.datasource.url=jdbc:mysql://localhost:3306/transaction_monitor
-   spring.datasource.username=your_username
-   spring.datasource.password=your_password
-   spring.jpa.hibernate.ddl-auto=update
-   ```
+- Java 17 or compatible JDK
+- MySQL
+- Maven
 
-2. Build and run:
+### 1. Clone the Repository
 
-   ```bash
-   ./mvnw spring-boot:run
-   ```
+```bash
+git clone https://github.com/SivaSaiBharath/Fraud-Detection-Engine.git
+```
 
-3. Send a test transaction:
+### 2. Create MySQL Database
 
-   ```bash
-   curl -X POST http://localhost:8080/requestTxn \
-     -H "Content-Type: application/json" \
-     -d '{"accountId":1,"amount":75000.00,"type":"DEBIT","location":"Hyderabad"}'
-   ```
+```sql
+CREATE DATABASE transaction_monitor;
+```
 
-## Roadmap
+### 3. Configure Database Connection
 
-- [ ] Additional fraud rules (velocity checks, geo-mismatch, unusual time-of-day)
-- [ ] Reconcile severity vs. action as the single source of truth for account locking
-- [ ] Endpoint to manually unlock an account
-- [ ] Endpoint to list / resolve alerts
-- [ ] Authentication on `/requestTxn`
+Update `src/main/resources/application.properties`:
 
-## Notes
+```properties
+spring.datasource.url=jdbc:mysql://localhost:3306/transaction_monitor
+spring.datasource.username=your_username
+spring.datasource.password=your_password
 
-This is a learning / portfolio project demonstrating a pluggable rule-engine pattern in Spring Boot — not a production-hardened fraud detection system. Account lookups happen server-side from `accountId` only; account state is never trusted from the request body.
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+```
+
+### 4. Run the Application
+
+```bash
+mvn spring-boot:run
+```
+
+On Windows:
+
+```bash
+mvnw.cmd spring-boot:run
+```
+
+### 5. Test APIs
+
+Use Postman to test transaction creation, retrieval, fraud detection, alert generation, and account locking.
+
+## Frontend Integration
+
+A React-based frontend is integrated with the Spring Boot backend to provide a user interface for interacting with the transaction monitoring application.
+
+The frontend communicates with backend REST APIs to display and manage transaction-related information.
+
+**Live Application:** https://fraud-detection-engine-1.onrender.com/
+
+**Frontend:** React.js, JavaScript, Vite
+
+**Deployment:** Render
+
+## Future Enhancements
+
+- [ ] Alert retrieval and resolution APIs.
+- [ ] Dashboard analytics and transaction statistics.
+- [ ] Advanced transaction filtering and pagination.
+- [ ] Manual account unlock functionality.
+- [ ] Additional fraud detection rules.
+- [ ] Fraud scoring mechanism.
+- [ ] Swagger / OpenAPI documentation.
+- [ ] Authentication and authorization.
+- [ ] Unit and integration testing.
+
+## Project Scope
+
+This project demonstrates Java backend development, Spring Boot REST APIs, database integration, dependency injection, Strategy Pattern, and rule-based fraud detection.
+
+It is a learning and portfolio application and is not a production-hardened banking or payment processing system.
