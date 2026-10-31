@@ -31,7 +31,7 @@ public class TransactionService {
 
 	
 	
-	//CONSTRUCTOR ENGINE
+	//CONSTRUCTOR INJECTION
 	public TransactionService(TransactionRepository txnRepo , AccountsRepository accountsRepo
 			, 	AlertsRepository alertsRepo, RuleEngine ruleEngine) {
 		

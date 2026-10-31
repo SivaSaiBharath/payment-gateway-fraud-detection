@@ -1,6 +1,7 @@
 package com.vcube.transactionmonitor.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
@@ -25,9 +26,8 @@ public class AlertsService {
 	}
 	
 	
-	public List<Alerts> getAlertsById(Iterable<Long> id){
-		return alertRepo.findAllById(id);
+	public Optional<Alerts> getAlertById(Long id) {
+	    return alertRepo.findById(id);
 	}
-	
 	
 }

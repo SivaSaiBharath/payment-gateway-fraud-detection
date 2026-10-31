@@ -37,6 +37,7 @@ public class Accounts {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+    
     public BigDecimal getBalance() {
         return balance;
     }
