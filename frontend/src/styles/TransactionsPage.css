@@ -1,78 +1,325 @@
+.transactions-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 100%;
+  min-width: 0;
+}
 
-/* Transaction creation form */
+/* CREATE TRANSACTION + RESPONSE */
+
+.transaction-create-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 22px;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  
+}
+
+.transaction-search-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* FORMS */
 
 .transaction-form {
   display: flex;
   flex-direction: column;
-  gap: 17px;
+  gap: 20px;
   width: 100%;
   padding: 10px;
+}
+
+.transaction-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 
 .transaction-form-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 100%;
+  min-width: 0;
 }
 
-.transaction-form-field label,
-.transaction-pin-field label {
+.transaction-form-field label {
+  color: #344054;
   font-size: 13px;
   font-weight: 600;
-  color: #34415c;
 }
 
 .transaction-form-field input,
 .transaction-form-field select {
   width: 100%;
-  height: 44px;
+  min-height: 44px;
+  padding: 10px 12px;
   box-sizing: border-box;
-  padding: 0 13px;
-  border: 1px solid #dce2ed;
-  border-radius: 9px;
-  background: #ffffff;
-  color: #17233c;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #101828;
   font-size: 14px;
   outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .transaction-form-field input:focus,
 .transaction-form-field select:focus {
-  border-color: #5265ed;
-  box-shadow: 0 0 0 3px rgba(82, 101, 237, 0.12);
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
 }
 
-/* PIN checkbox */
+/* PIN CHECKBOX */
 
 .transaction-pin-field {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: #f7f9fc;
-  border: 1px solid #e5eaf2;
-  border-radius: 9px;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  color: #344054;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .transaction-pin-field input {
   width: 17px;
   height: 17px;
-  accent-color: #5265ed;
   cursor: pointer;
 }
 
-.transaction-pin-field span {
-  color: #64718a;
+/* BUTTONS */
+
+.transaction-submit {
+  width: 50%;
+  min-height: 44px;
+  padding: 10px 16px;
+  align-self: center;
+  border: none;
+  border-radius: 8px;
+  background: #344054;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.transaction-submit:hover {
+  background: #1d2939;
+}
+
+.transaction-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* FIND TRANSACTION */
+
+.transaction-lookup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 10px;
+}
+
+/* TRANSACTION RESPONSE */
+
+.transaction-empty-response {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 210px;
+  padding: 20px;
+  border: 1px dashed #d0d5dd;
+  border-radius: 10px;
+  color: #667085;
+  font-size: 14px;
+  text-align: center;
+}
+
+.transaction-result {
+  padding: 18px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #fff;
+  min-height: 170px;
+}
+
+.transaction-result h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.transaction-result-reason {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.result-success {
+  border-color: #abefc6;
+  background: #f6fef9;
+}
+
+.result-success h3 {
+  color: #067647;
+}
+
+.result-rejected {
+  border-color: #fecdca;
+  background: #fffbfa;
+}
+
+.result-rejected h3 {
+  color: #b42318;
+}
+
+.result-flagged {
+  border-color: #fedf89;
+  background: #fffcf5;
+}
+
+.result-flagged h3 {
+  color: #b54708;
+}
+
+.result-pending h3 {
+  color: #344054;
+}
+
+.transaction-result-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.transaction-result-details div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.transaction-result-details span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.transaction-result-details strong {
+  color: #101828;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* RECENT TRANSACTIONS TABLE */
+
+.transaction-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.transaction-table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
   font-size: 13px;
 }
 
-.transaction-form > button {
-  align-self: flex-start;
+.transaction-table th,
+.transaction-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #eaecf0;
+  text-align: left;
+}
+
+.transaction-table th {
+  background: #f9fafb;
+  color: #475467;
+  font-weight: 600;
+}
+
+.transaction-table td {
+  color: #344054;
+}
+
+.transaction-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.transaction-table-message {
+  padding: 24px;
+  color: #667085;
+  text-align: center;
+  font-size: 14px;
+}
+
+/* STATUS LABELS */
+
+.transaction-status {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 20px;
+  background: #f2f4f7;
+  color: #344054;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.status-success {
+  background: #dcfae6;
+  color: #067647;
+}
+
+.status-rejected {
+  background: #fee4e2;
+  color: #b42318;
+}
+
+.status-flagged {
+  background: #fef0c7;
+  color: #b54708;
+}
+
+.status-pending {
+  background: #f2f4f7;
+  color: #344054;
+}
+
+/* RESPONSIVE DESIGN */
+
+@media (max-width: 1000px) {
+  .transaction-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-search-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 600px) {
-  .transaction-form {
-    gap: 14px;
+  .transaction-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-result-details {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-table th,
+  .transaction-table td {
+    padding: 10px;
   }
 }

@@ -25,8 +25,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 	Transaction findTopByAccountIdAndTimestampLessThanOrderByTimestampDesc(
 		    Long accountId,
 		    LocalDateTime timestamp
-		);
-	
-	
-	List<Transaction>findByFlagged(boolean flagged);
+		);List<Transaction> findByFlaggedTrueAndStatusNot(
+			    Transaction.TransactionStatus status);
+
+		List<Transaction> findByFlaggedFalseAndStatusNot(
+		    Transaction.TransactionStatus status);
+
+		List<Transaction> findByStatus(
+		    Transaction.TransactionStatus status);
 }

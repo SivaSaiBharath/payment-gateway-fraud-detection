@@ -40,10 +40,19 @@ public class TransactionController {
 	}
 	
 	
+	
+	
+	
 	@GetMapping
-	public List<Transaction> getTransactions(@RequestParam(required = false) Boolean flagged) {
+	public List<Transaction> getTransactions(
+	        @RequestParam(required = false) Boolean flagged,
+	        @RequestParam(required = false) String status) {
 
-	    if(flagged != null){
+	    if (status != null && status.equalsIgnoreCase("REJECTED")) {
+	        return txnService.getRejectedTransactions();
+	    }
+
+	    if (flagged != null) {
 	        return txnService.getTxnByStatus(flagged);
 	    }
 

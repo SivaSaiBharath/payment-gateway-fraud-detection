@@ -2,15 +2,16 @@
 
 :root {
     font-family: 'DM Sans', sans-serif;
-    color: #001840;
-    background: #f5f7fb;
+    color: #000e57;
+    font-weight: bold;
+    background: #c1d2f6;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     --ink: #17243b;
     --muted: #7d8aa1;
     --line: #e8edf4;
-    --navy: #101c31;
+    --navy: #08214d;
     --blue: #5268e8;
     --surface: #fff
 }
@@ -21,7 +22,7 @@
 
 html {
     min-width: 320px;
-    background: #f5f7fb
+    background: #ffffff
 }
 
 body {
@@ -54,4 +55,22 @@ a {
 ::selection {
     color: #17243b;
     background: #dfe5ff
+}
+/* Make dashboard welcome text dark black */
+
+.welcome-copy,
+.welcome-copy h2,
+.welcome-copy h2 span,
+.welcome-copy p,
+.welcome-kicker,
+.welcome-link {
+    color: #e9e3e3 !important;
+}
+
+/* Page header text */
+.page-header,
+.page-header h1,
+.page-header p,
+.page-header .eyebrow {
+    color: #000000 !important;
 }

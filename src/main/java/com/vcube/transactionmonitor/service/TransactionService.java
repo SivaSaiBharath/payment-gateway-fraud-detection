@@ -123,7 +123,9 @@ public class TransactionService {
 	}
 	
 	
-	
+	public List<Transaction> getRejectedTransactions() {
+	    return txnRepo.findByStatus(Transaction.TransactionStatus.REJECTED);
+	}
 	
 	//Transaction by id
 	
@@ -133,10 +135,20 @@ public class TransactionService {
 	
 	
 	
-	public List<Transaction> getTxnByStatus(boolean status) {
-		return txnRepo.findByFlagged(status);
+	public List<Transaction> getTxnByStatus(boolean flagged) {
+	    if (flagged) {
+	        return txnRepo.findByFlaggedTrueAndStatusNot(
+	            Transaction.TransactionStatus.REJECTED);
+	    }
+
+	    return txnRepo.findByFlaggedFalseAndStatusNot(
+	        Transaction.TransactionStatus.REJECTED);
 	}
 
+	public List<Transaction> getRejectedTransactions1() {
+	    return txnRepo.findByStatus(
+	        Transaction.TransactionStatus.REJECTED);
+	}
 
 
 	public List<Transaction> getTransactions() {

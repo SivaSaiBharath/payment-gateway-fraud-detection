@@ -1,67 +1,186 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useCallback, useEffect, useState } from 'react';
 import PageHeader from '../components/common/PageHeader.jsx';
 import Notice from '../components/common/Notice.jsx';
-import DataTable from '../components/common/DataTable.jsx';
-import JsonResult from '../components/common/JsonResult.jsx';
 import SectionCard from '../components/layout/SectionCard.jsx';
+
 import { transactionsApi } from '../services/transactionsApi.js';
-import { getErrorMessage } from '../services/api.js';
-import { asArray } from '../utils/format.js';
+
 import '../styles/TransactionsPage.css';
+
+const initialForm = {
+  accountId: '',
+  amount: '',
+  type: 'DEBIT',
+  location: '',
+  isPinCorrect: true,
+};
+
+function getTransactionId(transaction) {
+  return (
+    transaction.id ??
+    transaction.Txn_ID ??
+    transaction.txnId ??
+    transaction.transactionId ??
+    '-'
+  );
+}
+
+function sortRecentFirst(transactions) {
+  return [...transactions].sort((a, b) => {
+    const dateA = new Date(a.timestamp || 0).getTime();
+    const dateB = new Date(b.timestamp || 0).getTime();
+
+    if (dateA && dateB) {
+      return dateB - dateA;
+    }
+
+    return Number(getTransactionId(b)) - Number(getTransactionId(a));
+  });
+}
+
+function TransactionResult({ result }) {
+  if (!result) {
+    return (
+      <div className="transaction-empty-response">
+        Transaction response will appear here.
+      </div>
+    );
+  }
+
+  const status = String(result.status ?? 'UNKNOWN').toUpperCase();
+
+  const message =
+    result.reason ??
+    result.message ??
+    result.description ??
+    result.rejectionReason ??
+    '';
+
+  return (
+    <div className={`transaction-result result-${status.toLowerCase()}`}>
+      <h3>
+        {status === 'SUCCESS'
+          ? 'Transaction Successful'
+          : status === 'REJECTED'
+            ? 'Transaction Rejected'
+            : status === 'FLAGGED'
+              ? 'Transaction Flagged'
+              : `Transaction Status: ${status}`}
+      </h3>
+
+      {message && (
+        <p className="transaction-result-reason">{message}</p>
+      )}
+
+      <div className="transaction-result-details">
+        <div>
+          <span>Transaction ID</span>
+          <strong>{getTransactionId(result)}</strong>
+        </div>
+
+        <div>
+          <span>Account ID</span>
+          <strong>{result.accountId ?? '-'}</strong>
+        </div>
+
+        <div>
+          <span>Amount</span>
+          <strong>{result.amount ?? '-'}</strong>
+        </div>
+
+        <div>
+          <span>Type</span>
+          <strong>{result.type ?? '-'}</strong>
+        </div>
+
+        <div>
+          <span>Status</span>
+          <strong>{status}</strong>
+        </div>
+
+        <div>
+          <span>Location</span>
+          <strong>{result.location ?? '-'}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function TransactionsPage({ onChanged }) {
   const [rows, setRows] = useState([]);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState('all');
+
+  const [form, setForm] = useState(initialForm);
   const [lookupId, setLookupId] = useState('');
+
+  const [result, setResult] = useState(null);
+  const [notice, setNotice] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState(null);
-  const [result, setResult] = useState(undefined);
+  const [lookupLoading, setLookupLoading] = useState(false);
 
-  // Transaction form
-  const [form, setForm] = useState({
-    accountId: '',
-    amount: '',
-    type: 'DEBIT',
-    location: '',
-    isPinCorrect: true,
-  });
-
-  const load = useCallback(async (selectedFilter = filter) => {
+  // Load transactions
+  const loadTransactions = useCallback(async (selectedFilter = filter) => {
     setLoading(true);
-    setNotice(null);
 
     try {
-      setRows(asArray((await transactionsApi.list(selectedFilter)).data));
-    } catch (e) {
-      setRows([]);
-      setNotice({ type: 'error', text: getErrorMessage(e) });
+      let params = {};
+
+      if (selectedFilter === 'true') {
+        params = { flagged: true };
+      } else if (selectedFilter === 'false') {
+        params = { flagged: false };
+      } else if (selectedFilter === 'rejected') {
+        params = { status: 'REJECTED' };
+      }
+
+      const response = await transactionsApi.list(params);
+
+      setRows(Array.isArray(response.data) ? response.data : []);
+
+    } catch (error) {
+      setNotice({
+        type: 'error',
+        message:
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to load transactions.',
+      });
     } finally {
       setLoading(false);
     }
   }, [filter]);
 
   useEffect(() => {
-    load('');
-  }, []);
+    loadTransactions(filter);
+  }, [filter, loadTransactions]);
 
-  function handleChange(e) {
-    const { name, value, type, checked } = e.target;
+  // Sort transactions newest-first.
+  const recentTransactions = useMemo(
+    () => sortRecentFirst(rows),
+    [rows]
+  );
 
-    setForm((prev) => ({
-      ...prev,
+  // Form changes
+  function handleFormChange(event) {
+    const { name, value, type, checked } = event.target;
+
+    setForm((previous) => ({
+      ...previous,
       [name]: type === 'checkbox' ? checked : value,
     }));
   }
 
   // Create transaction
-  async function create(e) {
-    e.preventDefault();
+  async function handleCreateTransaction(event) {
+    event.preventDefault();
 
     setBusy(true);
     setNotice(null);
-    setResult(undefined);
+    setResult(null);
 
     const payload = {
       accountId: Number(form.accountId),
@@ -75,250 +194,314 @@ export default function TransactionsPage({ onChanged }) {
       const response = await transactionsApi.create(payload);
 
       setResult(response.data);
+
+      const status = String(response.data?.status ?? '').toUpperCase();
+
       setNotice({
-        type: 'success',
-        text: 'Transaction create request succeeded.',
+        type: status === 'REJECTED' ? 'error' : 'success',
+        message:
+          status === 'REJECTED'
+            ? 'Transaction rejected. Check the response for details.'
+            : 'Transaction request processed successfully.',
       });
 
-      setForm({
-        accountId: '',
-        amount: '',
-        type: 'DEBIT',
-        location: '',
-        isPinCorrect: true,
-      });
+      setForm(initialForm);
 
-      await load(filter);
+      await loadTransactions(filter);
       onChanged?.();
-    } catch (e) {
-      setNotice({
-        type: 'error',
-        text: getErrorMessage(e),
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Find transaction - unchanged
-  async function lookup(e) {
-    e.preventDefault();
-    if (!lookupId.trim()) return;
-
-    setBusy(true);
-    setNotice(null);
-    setResult(undefined);
-
-    try {
+    } catch (error) {
       setResult(
-        (await transactionsApi.getById(lookupId.trim())).data
+        typeof error.response?.data === 'object'
+          ? error.response.data
+          : null
       );
 
       setNotice({
-        type: 'success',
-        text: 'Transaction found.',
-      });
-    } catch (e) {
-      setNotice({
         type: 'error',
-        text: getErrorMessage(e),
+        message:
+          error.response?.data?.message ||
+          error.message ||
+          'Transaction creation failed.',
       });
     } finally {
       setBusy(false);
     }
   }
 
-  function changeFilter(value) {
-    setFilter(value);
-    load(value);
+  // Find transaction
+  async function handleFindTransaction(event) {
+    event.preventDefault();
+
+    if (!lookupId.trim()) {
+      setNotice({
+        type: 'error',
+        message: 'Please enter a transaction ID.',
+      });
+      return;
+    }
+
+    setLookupLoading(true);
+    setNotice(null);
+    setResult(null);
+
+    try {
+      const response = await transactionsApi.getById(lookupId.trim());
+
+      setResult(response.data);
+
+      setNotice({
+        type: 'success',
+        message: 'Transaction found successfully.',
+      });
+    } catch (error) {
+      setNotice({
+        type: 'error',
+        message:
+          error.response?.data?.message ||
+          error.message ||
+          'Transaction not found.',
+      });
+    } finally {
+      setLookupLoading(false);
+    }
   }
 
   return (
-    <>
+    <div className="transactions-page">
+
       <PageHeader
-        eyebrow="TRANSACTION MONITORING"
         title="Transactions"
-        description="Create transactions, retrieve by ID, and filter flagged or unflagged records."
-        action={
-          <button
-            className="secondary-button"
-            onClick={() => load(filter)}
-          >
-            Refresh list
-          </button>
-        }
+        subtitle="Create, search and monitor payment transactions."
       />
 
       {notice && (
-        <Notice type={notice.type} onClose={() => setNotice(null)}>
-          {notice.text}
+        <Notice type={notice.type}>
+          {notice.message}
         </Notice>
       )}
 
-      <div className="two-column">
+      {/* CREATE TRANSACTION + RESPONSE */}
+      <div className="transaction-create-grid">
 
-        {/* Create Transaction - Form */}
         <SectionCard
-          title="Create transaction"
-          subtitle="POST /Api/transaction"
+          title="Create Transaction"
+          description="Submit a new transaction for fraud evaluation."
         >
           <form
             className="transaction-form"
-            onSubmit={create}
+            onSubmit={handleCreateTransaction}
           >
-            <div className="transaction-form-field">
-              <label htmlFor="accountId">Account ID</label>
-              <input
-                id="accountId"
-                name="accountId"
-                type="number"
-                min="1"
-                placeholder="Enter account ID"
-                value={form.accountId}
-                onChange={handleChange}
-                required
-              />
+            <div className="transaction-form-grid">
+
+              <div className="transaction-form-field">
+                <label htmlFor="accountId">Account ID</label>
+                <input
+                  id="accountId"
+                  name="accountId"
+                  type="number"
+                  min="1"
+                  value={form.accountId}
+                  onChange={handleFormChange}
+                  placeholder="Enter account ID"
+                  required
+                />
+              </div>
+
+              <div className="transaction-form-field">
+                <label htmlFor="amount">Amount</label>
+                <input
+                  id="amount"
+                  name="amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={handleFormChange}
+                  placeholder="Enter amount"
+                  required
+                />
+              </div>
+
+              <div className="transaction-form-field">
+                <label htmlFor="type">Transaction Type</label>
+                <select
+                  id="type"
+                  name="type"
+                  value={form.type}
+                  onChange={handleFormChange}
+                >
+                  <option value="DEBIT">DEBIT</option>
+                  <option value="CREDIT">CREDIT</option>
+                </select>
+              </div>
+
+              <div className="transaction-form-field">
+                <label htmlFor="location">Location</label>
+                <input
+                  id="location"
+                  name="location"
+                  type="text"
+                  value={form.location}
+                  onChange={handleFormChange}
+                  placeholder="Enter location"
+                  required
+                />
+              </div>
+
             </div>
 
-            <div className="transaction-form-field">
-              <label htmlFor="amount">Transaction Amount</label>
+            <label className="transaction-pin-field">
+              <span>Is PIN correct?</span>
               <input
-                id="amount"
-                name="amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="Enter amount"
-                value={form.amount}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="transaction-form-field">
-              <label htmlFor="type">Transaction Type</label>
-              <select
-                id="type"
-                name="type"
-                value={form.type}
-                onChange={handleChange}
-                required
-              >
-                <option value="DEBIT">DEBIT</option>
-                <option value="CREDIT">CREDIT</option>
-              </select>
-            </div>
-
-            <div className="transaction-form-field">
-              <label htmlFor="location">Transaction Location</label>
-              <input
-                id="location"
-                name="location"
-                type="text"
-                placeholder="Enter location"
-                value={form.location}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="transaction-pin-field">
-              <label htmlFor="isPinCorrect">
-                Is PIN correct?
-              </label>
-              <input
-                id="isPinCorrect"
                 name="isPinCorrect"
                 type="checkbox"
                 checked={form.isPinCorrect}
-                onChange={handleChange}
+                onChange={handleFormChange}
               />
-              <span>
-                {form.isPinCorrect ? 'Correct PIN' : 'Incorrect PIN'}
-              </span>
-            </div>
+            </label>
 
             <button
-              className="primary-button"
+              className="transaction-submit"
               type="submit"
               disabled={busy}
             >
-              {busy ? 'Creating...' : 'Create transaction'}
+              {busy ? 'Processing...' : 'Create Transaction'}
             </button>
           </form>
-
-          <JsonResult
-            title="Transaction response"
-            data={result}
-          />
         </SectionCard>
 
-        {/* RIGHT SIDE - PRESERVED */}
-        <div className="vertical-stack">
+        <SectionCard
+          title="Transaction Response"
+          description="Result of your latest transaction."
+        >
+          <TransactionResult result={result} />
+        </SectionCard>
 
-          <SectionCard
-            title="Find transaction"
-            subtitle="GET /Api/transaction/{id}"
-          >
-            <form className="inline-form" onSubmit={lookup}>
-              <label className="field-label" htmlFor="transaction-id">
-                Transaction ID
-              </label>
-
-              <input
-                id="transaction-id"
-                type="number"
-                min="1"
-                value={lookupId}
-                onChange={(e) => setLookupId(e.target.value)}
-                placeholder="Enter transaction ID"
-                required
-              />
-
-              <button className="primary-button" disabled={busy}>
-                Find transaction
-              </button>
-            </form>
-          </SectionCard>
-
-          <SectionCard
-            title="Fraud filter"
-            subtitle="GET /Api/transaction?flagged=true|false"
-          >
-            <label className="field-label" htmlFor="flag-filter">
-              Show transactions
-            </label>
-
-            <select
-              id="flag-filter"
-              value={filter}
-              onChange={(e) => changeFilter(e.target.value)}
-              className="select-input"
-            >
-              <option value="">All transactions</option>
-              <option value="true">Flagged only</option>
-              <option value="false">Not flagged</option>
-            </select>
-          </SectionCard>
-
-        </div>
       </div>
 
-      {/* Transaction Records - PRESERVED */}
+      {/* FIND TRANSACTION + FRAUD FILTER */}
+      <div className="transaction-search-grid">
+
+        <SectionCard
+          title="Find Transaction"
+          description="Search using a transaction ID."
+        >
+          <form
+            className="transaction-lookup-form"
+            onSubmit={handleFindTransaction}
+          >
+            <div className="transaction-form-field">
+              <label htmlFor="lookupId">Transaction ID</label>
+              <input
+                id="lookupId"
+                type="text"
+                value={lookupId}
+                onChange={(event) => setLookupId(event.target.value)}
+                placeholder="Enter transaction ID"
+              />
+            </div>
+
+            <button
+              className="transaction-submit"
+              type="submit"
+              disabled={lookupLoading}
+            >
+              {lookupLoading ? 'Searching...' : 'Find Transaction'}
+            </button>
+          </form>
+        </SectionCard>
+
+        <SectionCard
+          title="Fraud Filter"
+          description="Filter transactions by fraud status."
+        >
+          <div className="transaction-form-field">
+            <label htmlFor="fraudFilter">Transaction Filter</label>
+
+            <select
+              id="fraudFilter"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+            >
+              <option value="all">All Transactions</option>
+              <option value="true">Flagged Transactions</option>
+              <option value="false">Success Transactions</option>
+              <option value="rejected">Rejected Transactions</option>
+            </select>
+          </div>
+        </SectionCard>
+
+      </div>
+
+      {/* RECENT TRANSACTIONS - ALWAYS AT THE BOTTOM */}
       <SectionCard
-        title="Transaction records"
-        subtitle={
-          filter === ''
-            ? 'All transactions'
-            : `Filter: flagged = ${filter}`
-        }
+        title="Recent Transactions"
+        description="Latest transactions displayed first."
       >
-        <DataTable
-          rows={rows}
-          loading={loading}
-          emptyText="No transactions found, or the API is not reachable."
-        />
+        <div className="transaction-table-wrapper">
+
+          {loading ? (
+            <p className="transaction-table-message">
+              Loading transactions...
+            </p>
+          ) : recentTransactions.length === 0 ? (
+            <p className="transaction-table-message">
+              No transactions found.
+            </p>
+          ) : (
+            <table className="transaction-table">
+
+              <thead>
+                <tr>
+                  <th>Transaction ID</th>
+                  <th>Account ID</th>
+                  <th>Amount</th>
+                  <th>Type</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Flagged</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {recentTransactions.map((transaction, index) => (
+                  <tr key={`${getTransactionId(transaction)}-${index}`}>
+                    <td>{getTransactionId(transaction)}</td>
+                    <td>{transaction.accountId ?? '-'}</td>
+                    <td>{transaction.amount ?? '-'}</td>
+                    <td>{transaction.type ?? '-'}</td>
+                    <td>{transaction.location ?? '-'}</td>
+
+                    <td>
+                      <span
+                        className={`transaction-status status-${String(
+                          transaction.status ?? 'unknown'
+                        ).toLowerCase()}`}
+                      >
+                        {transaction.status ?? '-'}
+                      </span>
+                    </td>
+
+                    <td>
+                      {transaction.flagged === true ? 'Yes' : 'No'}
+                    </td>
+
+                    <td>
+                      {transaction.timestamp
+                        ? new Date(transaction.timestamp).toLocaleString()
+                        : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+
+            </table>
+          )}
+
+        </div>
       </SectionCard>
-    </>
+
+    </div>
   );
 }
